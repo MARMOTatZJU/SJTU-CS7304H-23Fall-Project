@@ -1,5 +1,6 @@
 from itertools import product
 from copy import deepcopy
+import math
 
 import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin
@@ -13,10 +14,11 @@ from .utils import argmedian
 
 class SVMClassiffier(BaseEstimator, ClassifierMixin):
 
-    def __init__(self,):
+    def __init__(self, slack_coeff : float=0.0):
         self.vec_w = None
         self.scalar_b = None
         self.support_vecs = None
+        self.slack_coeff = slack_coeff
 
     def fit(self, X : np.ndarray, y : np.ndarray):
         N, D = X.shape
@@ -33,8 +35,22 @@ class SVMClassiffier(BaseEstimator, ClassifierMixin):
         MAT_Q = matrix(MAT_Q_NP)
         VEC_P = matrix(-np.ones((N,)))
         # inequality
-        MAT_G = matrix(-np.eye(N))  # shape=(N, N)
-        VEC_H = matrix(-np.zeros((N,)))  # shape=(N, 1)
+        if self.slack_coeff > 0.0:
+            # soft-margin, 0 <= alpha <= C, 2*N constraint
+            MAT_G_NP = np.concatenate((
+                -np.eye(N),
+                np.eye(N),
+            ), axis=0)
+            VEC_H_NP = np.concatenate((
+                -np.zeros((N,)),
+                self.slack_coeff*np.ones((N,)),
+            ), axis=0)
+        else:
+            # hard-margin, alpha >= 0, N constraint
+            MAT_G_NP = -np.eye(N)
+            VEC_H_NP = -np.zeros((N,))
+        MAT_G = matrix(MAT_G_NP)
+        VEC_H = matrix(VEC_H_NP)
         # equality
         MAT_A = matrix(y.reshape(1, N).astype(np.float64))  # shape=(1, N)
         VEC_B = matrix(np.zeros((1,)))  # shape=(1, 1)
@@ -81,9 +97,10 @@ class SVMClassiffier(BaseEstimator, ClassifierMixin):
  
 
 class MultiClassSVMClassiffier(BaseEstimator, ClassifierMixin):
-    def __init__(self, num_classes):
+    def __init__(self, num_classes, slack_coeff : float=0.0):
         self.num_classes = num_classes
-        self.svms = [SVMClassiffier() for _ in range(num_classes)]
+        self.slack_coeff = slack_coeff
+        self.svms = [SVMClassiffier(slack_coeff=slack_coeff) for _ in range(num_classes)]
     
     def fit(self, X : np.ndarray, y : np.ndarray):
         for class_id in range(self.num_classes):
