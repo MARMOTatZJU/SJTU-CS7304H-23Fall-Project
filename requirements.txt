@@ -5,3 +5,4 @@ scikit-learn
 cvxopt
 torch
 torchvision
+pandas
