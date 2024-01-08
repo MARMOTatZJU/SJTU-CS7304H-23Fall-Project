@@ -14,24 +14,26 @@ from .utils import argmedian
 
 class SVMClassiffier(BaseEstimator, ClassifierMixin):
 
-    def __init__(self, slack_coeff : float=0.0):
+    def __init__(self, slack_coeff : float=0.0, inner_prod_func=np.inner):
         self.vec_w = None
         self.scalar_b = None
-        self.support_vecs = None
         self.slack_coeff = slack_coeff
+        self.support_vecs = None
+        self.support_alphas = None
+        self.support_labels = None
+        self.inner_prod_func = inner_prod_func
 
     def fit(self, X : np.ndarray, y : np.ndarray):
         N, D = X.shape
 
         # objective
-        mat_q_outer_vec = y.reshape(N, 1)*X  # shape=(N, D)
-        MAT_Q_NP = mat_q_outer_vec @ mat_q_outer_vec.T
-        # TODO: implement kernelized SVM, or remove this commented part
-        # if self.inner_prod_func is np.inner:
-        # else:
-        #     MAT_Q_NP  = np.zeros((N, N))
-        #     for i, j in product(range(N), range(N)):
-        #         MAT_Q_NP[i, j] = y[i] * y[j] * self.inner_prod_func(X[i], X[j])
+        if self.inner_prod_func is np.inner:
+            mat_q_outer_vec = y.reshape(N, 1)*X  # shape=(N, D)
+            MAT_Q_NP = mat_q_outer_vec @ mat_q_outer_vec.T  # shape=(N, N)
+        else:
+            MAT_Q_NP  = np.zeros((N, N))
+            for i, j in product(range(N), range(N)):
+                MAT_Q_NP[i, j] = y[i] * y[j] * self.inner_prod_func(X[i], X[j])
         MAT_Q = matrix(MAT_Q_NP)
         VEC_P = matrix(-np.ones((N,)))
         # inequality
@@ -61,15 +63,25 @@ class SVMClassiffier(BaseEstimator, ClassifierMixin):
         nonzero_alpha_mask = (alphas > EPSILON).reshape(-1)  # shape=(N,)
         nonzero_idxs = np.argwhere(nonzero_alpha_mask).reshape(-1)
         # w
-        self.support_vecs = X[nonzero_idxs]
-        self.vec_w = \
-            (alphas[nonzero_alpha_mask].reshape(-1, 1) * y[nonzero_alpha_mask].reshape(-1, 1) * X[nonzero_alpha_mask]) \
-                .sum(axis=0)  # shape=(D,), summation on sample dimention
+        if self.inner_prod_func is np.inner:
+            self.vec_w = \
+                (alphas[nonzero_alpha_mask].reshape(-1, 1) * y[nonzero_alpha_mask].reshape(-1, 1) * X[nonzero_alpha_mask]) \
+                    .sum(axis=0)  # shape=(D,), summation on sample dimention
+        else:
+            self.support_vecs = X[nonzero_idxs]
+            self.support_alphas = alphas[nonzero_idxs]
+            self.support_labels = y[nonzero_idxs]
         # b
         scalar_b_candidates = list()
         for nonzero_idx in nonzero_idxs:
             support_vec = X[nonzero_idx]
-            scalar_b = y[nonzero_idx] - np.inner(self.vec_w, support_vec)   # shape=(1,)
+            if self.inner_prod_func is np.inner:
+                scalar_b = y[nonzero_idx] - np.inner(self.vec_w, support_vec)   # shape=(1,)
+            else:
+                scalar_b = y[nonzero_idx] - sum([
+                    alphas[i_support] * y[i_support] * self.inner_prod_func(X[i_support], support_vec)
+                    for i_support in nonzero_idxs
+                ])
             scalar_b_candidates.append(scalar_b)
         selected_nonzero_idx = argmedian(scalar_b_candidates)        
         self.scalar_b = scalar_b_candidates[selected_nonzero_idx]  # shape=(1,)
@@ -80,10 +92,20 @@ class SVMClassiffier(BaseEstimator, ClassifierMixin):
             Predicted SVM labels, 
         """
         N, D = X.shape
-        deicision_vars = np.array([
-            X[i_sample] @ self.vec_w + self.scalar_b
-            for i_sample in range(N)
-        ])
+        if self.inner_prod_func is np.inner:
+            deicision_vars = np.array([
+                X[i_sample] @ self.vec_w + self.scalar_b
+                for i_sample in range(N)
+            ]).reshape(N,)
+        else:
+            deicision_vars = list()
+            for i_sample in range(N):
+                deicision_var = self.scalar_b + sum([ alpha * label * self.inner_prod_func(vec, X[i_sample])
+                    for alpha, label, vec in \
+                        zip(self.support_alphas, self.support_labels, self.support_vecs)
+                ])
+                deicision_vars.append(deicision_var)
+            deicision_vars = np.array(deicision_vars).reshape(N,)
         proba = logistic.cdf(deicision_vars)
 
         return proba
@@ -97,10 +119,16 @@ class SVMClassiffier(BaseEstimator, ClassifierMixin):
  
 
 class MultiClassSVMClassiffier(BaseEstimator, ClassifierMixin):
-    def __init__(self, num_classes, slack_coeff : float=0.0):
+    def __init__(self, num_classes, slack_coeff : float=0.0, inner_prod_func=np.inner):
         self.num_classes = num_classes
         self.slack_coeff = slack_coeff
-        self.svms = [SVMClassiffier(slack_coeff=slack_coeff) for _ in range(num_classes)]
+        self.svms = [
+            SVMClassiffier(
+                slack_coeff=slack_coeff,
+                inner_prod_func=inner_prod_func,
+                )
+            for _ in range(num_classes)
+            ]
     
     def fit(self, X : np.ndarray, y : np.ndarray):
         for class_id in range(self.num_classes):
