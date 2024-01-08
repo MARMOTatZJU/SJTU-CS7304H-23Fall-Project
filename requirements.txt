@@ -2,3 +2,4 @@ kaggle
 numpy
 scipy
 scikit-learn
+cvxopt
