@@ -19,12 +19,6 @@ from common import MultiLayerPerceptronClassifier
 from common.utils import export_result_for_submission
 
 
-save_dir = './model_selection_results'
-cv_dirname = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
-cv_dir = f'{save_dir}/{cv_dirname}'
-os.makedirs(cv_dir, exist_ok=True)
-
-
 p = 'data/train_feature.pkl'
 with open(p, 'rb') as f:
     data = pickle.load(f)
@@ -46,11 +40,11 @@ classifier = MultiLayerPerceptronClassifier(num_classes=num_classes)
 model_selector = RandomizedSearchCV(
     classifier,
     param_distributions=dict(
-        n_layers=list(range(2, 8)),
+        n_layers=list(range(1, 10)),
         n_epochs=list(range(10, 30)),
-        batch_size=[2**i for i in range(6, 11)],
-        optim_lr=[10**i for i in range(-5, -1)],
-        optim_weight_decay=[1e-4, 1e-5],
+        batch_size=[2**i for i in range(4, 12)],
+        optim_lr=[1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1],
+        optim_weight_decay=[1e-4, 1e-5, 1e-6],
     ),
     n_iter=30,
     n_jobs=2,
@@ -60,6 +54,11 @@ model_selector = RandomizedSearchCV(
     refit=True,
 )
 model_selector.fit(data, labels)
+
+save_dir = './model_selection_results'
+cv_dirname = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
+cv_dir = f'{save_dir}/{cv_dirname}'
+os.makedirs(cv_dir, exist_ok=True)
 
 best_estimator = model_selector.best_estimator_
 predicted_test_labels = best_estimator.predict(test_data)
@@ -78,5 +77,5 @@ with open(export_best_params_path, 'w') as f:
 print(f'Best params exported at: {export_best_params_path}')
 
 
-from IPython import embed;embed()
+# from IPython import embed;embed()
 
