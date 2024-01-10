@@ -3,6 +3,7 @@ import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin
 import torch
 import torchvision
+import scipy
 
 
 class MLP(torch.nn.Sequential):
@@ -68,6 +69,7 @@ class MultiLayerPerceptronClassifier(BaseEstimator, ClassifierMixin):
         self.num_classes = num_classes
         self.verbose = verbose
         self.model = None
+        self.device = None
         self.n_layers = n_layers
         self.n_epochs = n_epochs
         self.batch_size = batch_size
@@ -127,14 +129,18 @@ class MultiLayerPerceptronClassifier(BaseEstimator, ClassifierMixin):
                     print(f'{i_epoch}/{i_iteration}, loss: {loss.detach().cpu().numpy()}')
         self.model.eval()
 
-    def predict_proba(self, X : np.ndarray) -> np.ndarray:
+    def predict_logit(self, X : np.ndarray) -> np.ndarray:
         device = self.get_device()
         self.model.to(device)
         X_tensor = torch.from_numpy(X).type(torch.float32).to(device)
         self.model.eval()
-        logits = self.model(X_tensor)
-        proba = torch.nn.functional.softmax(logits, dim=1)
-        proba = proba.detach().cpu().numpy()
+        logits = self.model(X_tensor).detach().cpu().numpy()
+
+        return logits
+
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        logits = self.predict_logit(X)
+        proba = scipy.special.softmax(logits, axis=1)
 
         return proba
 
@@ -145,11 +151,11 @@ class MultiLayerPerceptronClassifier(BaseEstimator, ClassifierMixin):
         return all_samples_class_ids
 
     def get_device(self,):
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        if hasattr(self, 'device') and self.device is not None:
+            device = self.device
+        else:
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
         return device
 
-
-
-
-
-
+    def set_device(self, device):
+        self.device = device
