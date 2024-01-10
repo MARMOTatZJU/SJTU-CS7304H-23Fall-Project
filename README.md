@@ -21,3 +21,11 @@ ps -ef | grep 'myProcessName' | grep -v grep | awk '{print $2}' | xargs -r kill 
 ```
 
 Source: https://stackoverflow.com/questions/8987037/how-to-kill-all-processes-with-a-given-partial-name
+
+## infinite checkpoints
+
+For model selection
+
+```
+while true;do time CUDA_VISIBLE_DEVICES=6 python test_model_selection.py;done
+```
