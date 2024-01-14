@@ -1,6 +1,7 @@
 """
 Model ensemble
 """
+import argparse
 import os
 import random
 from copy import deepcopy
@@ -16,6 +17,16 @@ from sklearn.model_selection import RandomizedSearchCV
 
 from common import MultiLayerPerceptronClassifier
 from common.utils import export_result_for_submission
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--ensemble_method', type=str, default='argmax_on_proba')
+    args = parser.parse_args()
+
+    return args
+
+args = parse_args()
 
 
 p = 'data/train_feature.pkl'
@@ -61,10 +72,36 @@ all_models_predicted_test_probas = np.stack(all_models_predicted_test_probas, ax
 ensemble_predicted_test_logits = all_models_predicted_test_logits.mean(axis=0)  # shape=(N, C)
 ensemble_predicted_test_probas = all_models_predicted_test_probas.mean(axis=0)  # shape=(N, C)
 
+# argmax on probability
 ensemble_predicted_test_labels_with_probas = np.argmax(ensemble_predicted_test_probas, axis=1)  # shape(N,), dtype=np.int64
+# argmax on logit
 ensemble_predicted_test_labels_with_logits = np.argmax(ensemble_predicted_test_logits, axis=1)  # shape(N,), dtype=np.int64
+# voting
+all_models_predicted_classes = np.argmax(all_models_predicted_test_probas, axis=2)  # shape=(M, N)
+all_models_predicted_classes = np.swapaxes(all_models_predicted_classes, 0, 1)  # shape=(N, M)
+voting_predicted_classes = [-1 for _ in range(len(all_models_predicted_classes))]
+for i_sample in range(len(all_models_predicted_classes)):
+    per_samlpe_predicted_classes = all_models_predicted_classes[i_sample]  # shape=(M,)
+    unique, counts = np.unique(per_samlpe_predicted_classes, return_counts=True)
+    max_count_idx = np.argmax(counts)
+    max_count = counts[max_count_idx]
+    if (max_count == counts).sum() == 1:
+        voting_predicted_classes[i_sample] = unique[max_count_idx]
+    else:
+        print(f'no consensus on sample: {i_sample}')
+        voting_predicted_classes[i_sample] = ensemble_predicted_test_labels_with_probas[i_sample]
+voting_predicted_classes = np.array(voting_predicted_classes)
 
-ensemble_predicted_test_labels = ensemble_predicted_test_labels_with_probas
+# choose an ensemble method and ouptut
+if args.ensemble_method == 'argmax_on_proba':
+    ensemble_predicted_test_labels = ensemble_predicted_test_labels_with_probas
+elif args.ensemble_method == 'argmax_on_logit':
+    ensemble_predicted_test_labels = ensemble_predicted_test_labels_with_logits
+elif args.ensemble_method == 'voting':
+    ensemble_predicted_test_labels = voting_predicted_classes
+else:
+    raise ValueError(f'Unsuppoerted ensemble method: {args.ensemble_method}')
+
 export_path = f'./ensemble_submission.csv'
 export_result_for_submission(ensemble_predicted_test_labels, export_path)
 
