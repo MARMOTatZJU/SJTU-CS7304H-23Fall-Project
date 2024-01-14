@@ -21,7 +21,7 @@ from common.utils import export_result_for_submission
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--ensemble_method', type=str, default='argmax_on_proba')
+    parser.add_argument('--ensemble_method', type=str, default='avg_on_proba')
     args = parser.parse_args()
 
     return args
@@ -93,9 +93,9 @@ for i_sample in range(len(all_models_predicted_classes)):
 voting_predicted_classes = np.array(voting_predicted_classes)
 
 # choose an ensemble method and ouptut
-if args.ensemble_method == 'argmax_on_proba':
+if args.ensemble_method == 'avg_on_proba':
     ensemble_predicted_test_labels = ensemble_predicted_test_labels_with_probas
-elif args.ensemble_method == 'argmax_on_logit':
+elif args.ensemble_method == 'avg_on_logit':
     ensemble_predicted_test_labels = ensemble_predicted_test_labels_with_logits
 elif args.ensemble_method == 'voting':
     ensemble_predicted_test_labels = voting_predicted_classes
