@@ -60,11 +60,11 @@ class MultiLayerPerceptronClassifier(BaseEstimator, ClassifierMixin):
             num_classes,
             verbose=False,
             n_layers=5,
-            n_epochs=30,
-            batch_size=1024,
+            n_epochs=25,
+            batch_size=512,
             optim_type='Adam',
-            optim_lr=1e-3,
-            optim_weight_decay=1e-4,
+            optim_lr=1e-4,
+            optim_weight_decay=1e-5,
             ):
         self.num_classes = num_classes
         self.verbose = verbose
